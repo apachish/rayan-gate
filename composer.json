@@ -1,0 +1,33 @@
+{
+  "name":         "rayanpay/rayan-gate",
+  "description":  "The gateway is the interface between the acceptor and the bank payment gateways.",
+  "homepage":     "https://github.com/apachish/rayan-gate",
+  "keywords":     ["gateways", "bank", "payment", "rayanpay", "soap","Rest"],
+  "license":      "MIT",
+  "authors": [
+    {
+        "name": "shahriar pahlevansadegh",
+        "email": "shpahlevan@apachish.ir"
+    }
+  ],
+  "require": {
+    "guzzlehttp/guzzle": "*"
+  },
+  "autoload": {
+    "psr-4": {
+      "Rayanpay\\RayanGate\\": "src/"
+    }
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "Rayanpay\\RayanGate\\RayanGateServiceProvider"
+      ]
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Egulias\\RayanGate\\Tests\\": "tests"
+    }
+  }
+}
