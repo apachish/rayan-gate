@@ -1,7 +1,7 @@
 <?php
 
 return [
-    "MerchantID" => env("MerchantID"),
+    "MerchantID" => env("MERCHANTID"),
     "type_gateway" => env("TYPEGATEWAY","soap"),//soap,rest
     "address_soap"=>env("ADDRESSSOAP","https://pms.rayanpay.com/pg/services/webgate/wsdl"),
     "address_ref"=>env("ADDRESSREF","https://pms.rayanpay.com/pg/startpay/"),

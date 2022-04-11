@@ -3,6 +3,9 @@ namespace Rayanpay\RayanGate\Services;
 
 use Rayanpay\RayanGate\Models\PaymentRequest;
 use Rayanpay\RayanGate\Models\PaymentVerification;
+use Rayanpay\RayanGate\Objects\PaymentRequest as PaymentRequestObject;
+use Rayanpay\RayanGate\Objects\PaymentVerification as PaymentVerificationObject;
+use SoapClient;
 
 class RayanPayServices
 {
@@ -21,6 +24,12 @@ class RayanPayServices
         return (extension_loaded('soap')) ? true : false;
     }
 
+    private static function curl_check()
+    {
+        return (function_exists('curl_version')) ? true : false;
+    }
+
+
     /**
      * تابعی برای مشخص کردن پیام خطا با استفاده از کد بازگشتی از درخواست پاسخ
      * @param $error
@@ -34,13 +43,9 @@ class RayanPayServices
             return "لینک بازگشت ( CallbackURL ) نباید خالی باشد";
         }
 
-        $error = config("errors-gatway");
+        $error = config("errors-gateway.errors");
+        return data_get($error,$code,"خطای نامشخص هنگام اتصال به درگاه رایان مهر");
 
-        if (array_key_exists("{$code}", $error)) {
-            return $error["{$code}"];
-        } else {
-            return "خطای نامشخص هنگام اتصال به درگاه رایان مهر";
-        }
     }
 
     public static function redirect($url)
@@ -52,43 +57,42 @@ class RayanPayServices
     /*
      * تابع درخواست شروع و اتصال به درگاه بانک می باشد که در صورت درست بودن موارد ارسالی بدون خطا به درگاه رفته
      */
-    public static function request(PaymentRequest $paymentRequest)
+    public static function request(PaymentRequestObject $paymentRequest)
     {
         $Status = 0;
         $StartPayUrl = "";
         $type_gateway = config("config-gateway.type_gateway");
-        $paymentRequest->MerchantID = config("config-gateway.MerchantID");
-        $paymentRequest->Amount =  (int)$paymentRequest->Amount;
-        $paymentRequest->CallbackURL = route("gateway.verify");
+        $paymentRequest->setMerchantId( config("config-gateway.MerchantID"));
+        $paymentRequest->setAmount(  (int)$paymentRequest->Amount);
+        $paymentRequest->setCallbackURL( route("gateway.verify"));
 
         if ($type_gateway == "soap" && self::soap_check() === true) {
-            $client = new \SoapClient(config("config-gateway.address_soap"), [
+            $client = new SoapClient(config("config-gateway.address_soap"), [
                 'encoding' => 'UTF-8',
                 "location" => config("config-gateway.address_soap"),
                 'trace' => 1,
                 "exception" => 1,
             ]);
 
-
             $result = $client->PaymentRequest($paymentRequest);
-            dd($result);
             if (!isset($result->PaymentRequestResult)) return [];
             $paymentRequest->Status = (isset($result->PaymentRequestResult->Status) && $result->PaymentRequestResult->Status != "") ? $result->PaymentRequestResult->Status : 0;
             $paymentRequest->Authority = (isset($result->PaymentRequestResult->Authority) && $result->PaymentRequestResult->Authority != "") ? $result->PaymentRequestResult->Authority : "";
             $StartPayUrl = ($paymentRequest->Authority != "") ? config("config-gateway.address_ref") . $paymentRequest->Authority : "";
 
-        } elseif ($type == "rest" && self::curl_check() === true) {
-            list($response, $http_status) = self::getResponse(config("config-gateway.address_soap"), array_filter($paymentRequest->toArray()));
+        } elseif ($type_gateway == "rest" && self::curl_check() === true) {
+            list($response, $http_status) = self::getResponse(config("config-gateway.address_rest"), array_filter((array)$paymentRequest));
             $paymentRequest->Status = (isset($response->status) && $response->status != "") ? $response->status : 0;
             $paymentRequest->Authority = (isset($response->authority) && $response->authority != "") ? $response->authority : "";
             $StartPayUrl = ($paymentRequest->Authority != "") ? config("config-gateway.address_ref") . $paymentRequest->Authority : "";
         }
-        $paymentRequest = $paymentRequest->create($paymentRequest->toArray());
+        $paymentRequestModel = new PaymentRequest();
+        $paymentRequestModel = $paymentRequestModel->create((array)$paymentRequest);
         return array(
             "Method" => $type_gateway,
-            "Status" => $Status,
-            "paymentRequest" => $paymentRequest,
-            "Message" => self::error_message($Status, $paymentRequest->CallbackURL, true),
+            "Status" => $paymentRequest->Status,
+            "paymentRequest" => $paymentRequestModel,
+            "Message" => self::error_message($paymentRequest->Status, $paymentRequest->CallbackURL, true),
             "StartPay" => $StartPayUrl,
         );
     }
@@ -103,12 +107,11 @@ class RayanPayServices
         $RefID = "";
 
         $type_gateway = config("config-gateway.type_gateway");
-        $payment_verification = new PaymentVerification();
-        $payment_verification->payment_request_id = $payment_request->id;
-        $paymentVerification->MerchantID = config("config-gateway.MerchantID");
-        $paymentVerification->Amount = $payment_request->Amount;
-        $paymentVerification->Authority = $payment_request->Authority;
-
+        $payment_verification = new PaymentVerificationObject();
+        $payment_verification->payment_request_id = $paymentRequest->id;
+        $payment_verification->setMerchantID(config("config-gateway.MerchantID"));
+        $payment_verification->setAmount($paymentRequest->Amount);
+        $payment_verification->setAuthority($paymentRequest->Authority);
         if ($type_gateway == "soap" && self::soap_check() === true) {
             $client = new SoapClient(config("config-gateway.address_soap"), [
                 'encoding' => 'UTF-8',
@@ -116,28 +119,27 @@ class RayanPayServices
                 'trace' => 1,
                 "exception" => 1,
             ]);
-
             $result = $client->PaymentVerification(
                 $payment_verification
             );
-            $paymentVerification->Status = isset($result->PaymentVerificationResult->Status) ? $result->PaymentVerificationResult->Status : 0;
-            $paymentVerification->RefID = (isset($result->PaymentVerificationResult->RefID)) ? $result->PaymentVerificationResult->RefID : "";
-            $Message = self::error_message($Status, "", "");
+            $payment_verification->Status = data_get($result,"PaymentVerificationResult.Status",0) ;
+            $payment_verification->RefID = data_get($result,"PaymentVerificationResult.RefID","");
+            $Message = self::error_message($payment_verification->Status, "", "");
 
 
         } elseif ($type_gateway == "rest" && self::curl_check() === true) {
-            $data = $payment_verification->toArray();
-            list($response, $http_status) = self::getResponse(config("config-gateway.address_rest_verify"), $data);
-            $paymentVerification->Status = (isset($response->status) && $response->status != "") ? $response->status : 0;
-            $paymentVerification->RefID = (isset($response->refID) && $response->refID != "") ? $response->refID : "";
-            $Message = self::error_message($Status, "", "", false);
+            list($response, $http_status) = self::getResponse(config("config-gateway.address_rest_verify"), (array)$payment_verification);
+            $payment_verification->Status = data_get($response,"status",0);
+            $payment_verification->RefID = data_get($response,"refID","");
+            $Message = self::error_message($payment_verification->Status, "", "", false);
         }
-        $payment_verification = $payment_verification->create($paymentVerification->toArray());
+        $payment_verification_model =  new PaymentVerification();
+        $payment_verification_model = $payment_verification_model->create((array)$payment_verification);
         return array(
-            "Method" => $type,
-            "Status" => $Status,
+            "Method" => $type_gateway,
+            "Status" => $payment_verification->Status,
             "Message" => $Message,
-            "payment_verification"=>$payment_verification
+            "payment_verification"=>$payment_verification_model
         );
     }
 

@@ -1,6 +1,6 @@
 <?php
 
-namespace ArmanTadbir\AuthPassport\App\Http\Controllers;
+namespace Rayanpay\RayanGate\App\Http\Controllers;
 
 
 
@@ -14,8 +14,8 @@ class GatewayController extends Controller
 {
     public function verification(Request $request)
     {
-        $payment_request = PaymentRequest::find($request->Authority);
-        if($payment_request == null)return response()->json([],404);
+        $payment_request = PaymentRequest::where("Authority",$request->Authority)->first();
+        if($payment_request == null)return response()->json([$payment_request,$request->Authority],404);
         $result = RayanPayServices::verify($payment_request);
         return response()->json($result,200);
     }

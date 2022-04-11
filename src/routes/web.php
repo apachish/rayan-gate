@@ -7,11 +7,11 @@
 
 Route::middleware('web')
     ->prefix('/rayanpay/gateway')
-    ->namespace('ArmanTadbir\AuthPassport\App\Http\Controllers')
+    ->namespace('Rayanpay\RayanGate\App\Http\Controllers')
     ->group(function () {
         Route::middleware(env("USE_AUTH_GATEWAY",false)?['auth']:[])
             ->group(function () {
-                Route::get('/verify', 'UsersController@GatewayController')->name("gateway.verify");
+                Route::get('/verify', 'GatewayController@verification')->name("gateway.verify");
             });
     });
 
