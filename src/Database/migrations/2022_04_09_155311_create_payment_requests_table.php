@@ -25,11 +25,10 @@ class CreatePaymentRequestsTable extends Migration
                     ->onUpdate('cascade');
             }
             $table->bigInteger('Amount');
-            $table->bigInteger('CallbackURL');
             $table->text('Description')->nullable();
             $table->string('Email')->nullable();
             $table->string('Mobile')->nullable();
-            $table->string('response_code');
+            $table->string('Status');
             $table->string('Authority');
             $table->timestamps();
         });

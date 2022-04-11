@@ -6,12 +6,12 @@
  */
 
 Route::middleware('web')
-    ->prefix('panel/users')
+    ->prefix('/rayanpay/gateway')
     ->namespace('ArmanTadbir\AuthPassport\App\Http\Controllers')
     ->group(function () {
-        Route::middleware(['auth'])
+        Route::middleware(env("USE_AUTH_GATEWAY",false)?['auth']:[])
             ->group(function () {
-                Route::get('/customer/list', 'UsersController@index')->name("users-list");
+                Route::get('/verify', 'UsersController@GatewayController')->name("gateway.verify");
             });
     });
 

@@ -8,17 +8,15 @@
 
 namespace Rayanpay\RayanGate\Models;
 
-
-use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 
 class PaymentVerification extends Model
 {
 
     protected $fillable = [
-        "MerchantId",
-        "Amount",
-        "Authority",
+        "RefID",
+        "Status",
+        "payment_request_id",
     ];
     
 }

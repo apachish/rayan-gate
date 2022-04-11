@@ -1,6 +1,9 @@
 <?php
 namespace Rayanpay\RayanGate\Services;
 
+use Rayanpay\RayanGate\Models\PaymentRequest;
+use Rayanpay\RayanGate\Models\PaymentVerification;
+
 class RayanPayServices
 {
     public $Authority = "";
@@ -49,164 +52,120 @@ class RayanPayServices
     /*
      * تابع درخواست شروع و اتصال به درگاه بانک می باشد که در صورت درست بودن موارد ارسالی بدون خطا به درگاه رفته
      */
-    public static function request()
+    public static function request(PaymentRequest $paymentRequest)
     {
         $Status = 0;
         $StartPayUrl = "";
-        if ($this->type == "soap" && $this->soap_check() === true) {
+        $type_gateway = config("config-gateway.type_gateway");
+        $paymentRequest->MerchantID = config("config-gateway.MerchantID");
+        $paymentRequest->Amount =  (int)$paymentRequest->Amount;
+        $paymentRequest->CallbackURL = route("gateway.verify");
 
-            $client = new SoapClient(config("config-gatway.ADDRESSSOAP"), [
+        if ($type_gateway == "soap" && self::soap_check() === true) {
+            $client = new \SoapClient(config("config-gateway.address_soap"), [
                 'encoding' => 'UTF-8',
-                "location" => config("config-gatway.ADDRESSSOAP"),
+                "location" => config("config-gateway.address_soap"),
                 'trace' => 1,
                 "exception" => 1,
             ]);
 
-            $paymentRequest = new PaymentRequest();
-            $paymentRequest->setMerchantId($this->MerchantID);
-            $paymentRequest->setAmount((int)$this->Amount);
-            $paymentRequest->setDescription($this->Description);
-            $paymentRequest->setEmail($this->email);
-            $paymentRequest->setMobile($this->mobile);
-            $paymentRequest->setCallbackURL($this->CallbackURL);
 
             $result = $client->PaymentRequest($paymentRequest);
+            dd($result);
             if (!isset($result->PaymentRequestResult)) return [];
-            $Status = (isset($result->PaymentRequestResult->Status) && $result->PaymentRequestResult->Status != "") ? $result->PaymentRequestResult->Status : 0;
-            $this->Authority = (isset($result->PaymentRequestResult->Authority) && $result->PaymentRequestResult->Authority != "") ? $result->PaymentRequestResult->Authority : "";
-            $StartPayUrl = ($this->Authority != "") ? config("config-gatway.ADDRESSREF") . $this->Authority : "";
+            $paymentRequest->Status = (isset($result->PaymentRequestResult->Status) && $result->PaymentRequestResult->Status != "") ? $result->PaymentRequestResult->Status : 0;
+            $paymentRequest->Authority = (isset($result->PaymentRequestResult->Authority) && $result->PaymentRequestResult->Authority != "") ? $result->PaymentRequestResult->Authority : "";
+            $StartPayUrl = ($paymentRequest->Authority != "") ? config("config-gateway.address_ref") . $paymentRequest->Authority : "";
 
-        } elseif ($this->type == "rest" && $this->curl_check() === true) {
-            $paramter = [
-                "merchantID" => $this->MerchantID,
-                "amount" => (int)$this->Amount,
-                "description" => $this->Description,
-                "email" => $this->email,
-                "mobile" => $this->mobile,
-                "callbackURL" => $this->CallbackURL
-
-            ];
-            list($response, $http_status) = $this->getResponse(config("config-gatway.ADDRESSSOAP"), array_filter($paramter));
-            $Status = (isset($response->status) && $response->status != "") ? $response->status : 0;
-            $this->Authority = (isset($response->authority) && $response->authority != "") ? $response->authority : "";
-            $StartPayUrl = ($this->Authority != "") ? config("config-gatway.ADDRESSREF") . $this->Authority : "";
+        } elseif ($type == "rest" && self::curl_check() === true) {
+            list($response, $http_status) = self::getResponse(config("config-gateway.address_soap"), array_filter($paymentRequest->toArray()));
+            $paymentRequest->Status = (isset($response->status) && $response->status != "") ? $response->status : 0;
+            $paymentRequest->Authority = (isset($response->authority) && $response->authority != "") ? $response->authority : "";
+            $StartPayUrl = ($paymentRequest->Authority != "") ? config("config-gateway.address_ref") . $paymentRequest->Authority : "";
         }
-        if ($this->Authority) {
-            $this->saveStorage();
-        }
+        $paymentRequest = $paymentRequest->create($paymentRequest->toArray());
         return array(
-            "Method" => $this->type,
+            "Method" => $type_gateway,
             "Status" => $Status,
-            "Amount" => $this->Amount,
-            "Mobile" => $this->mobile,
-            "Email" => $this->email,
-            "Description" => $this->Description,
-            "Message" => self::error_message($Status, $this->CallbackURL, true),
+            "paymentRequest" => $paymentRequest,
+            "Message" => self::error_message($Status, $paymentRequest->CallbackURL, true),
             "StartPay" => $StartPayUrl,
-            "Authority" => $this->Authority
         );
     }
 
     /*
      * تابع درخواست  تایید بود که با توجه به گذاشتن شماره سفارش در ادرس بازگشتی در این تلبع بررسی شده و در صورت درست بودن پول از حساب کاربر کم می شود
      */
-    public static function verify()
+    public static function verify(PaymentRequest $paymentRequest)
     {
-        $this->readStorage();
         $Status = 0;
         $Message = "";
         $RefID = "";
 
+        $type_gateway = config("config-gateway.type_gateway");
+        $payment_verification = new PaymentVerification();
+        $payment_verification->payment_request_id = $payment_request->id;
+        $paymentVerification->MerchantID = config("config-gateway.MerchantID");
+        $paymentVerification->Amount = $payment_request->Amount;
+        $paymentVerification->Authority = $payment_request->Authority;
 
-        if ($this->type == "soap" && $this->soap_check() === true) {
-
-
-            $client = new SoapClient(config("config-gatway.ADDRESSSOAP"), [
+        if ($type_gateway == "soap" && self::soap_check() === true) {
+            $client = new SoapClient(config("config-gateway.address_soap"), [
                 'encoding' => 'UTF-8',
-                "location" => config("config-gatway.ADDRESSSOAP"),
+                "location" => config("config-gateway.address_soap"),
                 'trace' => 1,
                 "exception" => 1,
             ]);
-            $payment_verification = new PaymentVerification();
-            $payment_verification->setMerchantId($this->MerchantID);
-            $payment_verification->setAmount($this->Amount);
-            $payment_verification->setAuthority($this->Authority);
+
             $result = $client->PaymentVerification(
                 $payment_verification
             );
-            $Status = isset($result->PaymentVerificationResult->Status) ? $result->PaymentVerificationResult->Status : 0;
-            $RefID = (isset($result->PaymentVerificationResult->RefID)) ? $result->PaymentVerificationResult->RefID : "";
+            $paymentVerification->Status = isset($result->PaymentVerificationResult->Status) ? $result->PaymentVerificationResult->Status : 0;
+            $paymentVerification->RefID = (isset($result->PaymentVerificationResult->RefID)) ? $result->PaymentVerificationResult->RefID : "";
             $Message = self::error_message($Status, "", "");
 
 
-        } elseif ($this->type == "rest" && $this->curl_check() === true) {
-            $data = [
-                "MerchantID" => $this->MerchantID,
-                'Amount' => (int)$this->Amount,
-                'Authority' => $this->Authority
-            ];
-            list($response, $http_status) = $this->getResponse(config("config-gatway.ADDRESSSOAP")_verify, $data);
-            $Status = (isset($response->status) && $response->status != "") ? $response->status : 0;
-            $RefID = (isset($response->refID) && $response->refID != "") ? $response->refID : "";
+        } elseif ($type_gateway == "rest" && self::curl_check() === true) {
+            $data = $payment_verification->toArray();
+            list($response, $http_status) = self::getResponse(config("config-gateway.address_rest_verify"), $data);
+            $paymentVerification->Status = (isset($response->status) && $response->status != "") ? $response->status : 0;
+            $paymentVerification->RefID = (isset($response->refID) && $response->refID != "") ? $response->refID : "";
             $Message = self::error_message($Status, "", "", false);
         }
-
+        $payment_verification = $payment_verification->create($paymentVerification->toArray());
         return array(
-            "Method" => $this->type,
+            "Method" => $type,
             "Status" => $Status,
             "Message" => $Message,
-            "Amount" => $this->Amount,
-            "Mobile" => $this->mobile,
-            "Email" => $this->email,
-            "Description" => $this->Description,
-            "RefID" => $RefID,
-            "Authority" => $this->Authority
+            "payment_verification"=>$payment_verification
         );
     }
 
-    public static function notVerify()
-    {
-        $this->readStorage();
-        $Status = 0;
-        $Message = "";
-
-        return array(
-            "Method" => $this->type,
-            "Status" => $Status,
-            "Message" => $Message,
-            "Amount" => $this->Amount,
-            "Mobile" => $this->mobile,
-            "Email" => $this->email,
-            "Description" => $this->Description,
-            "Authority" => $this->Authority
-        );
-    }
-
-
+    
     /*
      * برای چک کردن موارد ارسالی در فرم که عدد وارد شود خالی نباشد
      */
     public static function validationForm($data)
     {
         $error = [];
-        if (empty($data['Amount']) || empty($data['MerchantID'])) {
+        if (!data_get($data,'Amount') || !data_get($data,'MerchantID')) {
             $error['fill'] = "فیلد های ستاره دار اجباری می باشد";
         }
-        if (!filter_var($data['Amount'], FILTER_VALIDATE_INT)) {
+        if (!filter_var(data_get($data,'Amount'), FILTER_VALIDATE_INT)) {
             $error["Amount"] = "مقدار  مبلغ ارسالی عدد باشد.";
         }
 
-        if ($data['Amount'] <= 1000) {
+        if (data_get($data,'Amount') <= 1000) {
 
             echo $error["price-gt"] = "مقدار مبلغ ارسالی بزگتر از 1000 باشد";
         }
 
-        if ($data['Mobile'] && !$this->perfix_mobile($data['Mobile'])) {
+        if (data_get($data,'Mobile') && !self::perfix_mobile(data_get($data,'Mobile'))) {
 
             echo $error["Mobile"] = " شماره موبایل باید با 98 شروع شود و یا تعداد اعداد وارد شده موبایل درست نیست";
         }
 
-        if ($data['Email'] && !filter_var($data['Email'], FILTER_VALIDATE_EMAIL)) {
+        if (data_get($data,'Email') && !filter_var(data_get($data,'Email'), FILTER_VALIDATE_EMAIL)) {
 
             echo $error["Email"] = " ایمیل وارد شده صحیح نمی باشد";
         }
@@ -240,48 +199,16 @@ class RayanPayServices
         /*
          * داده ارسالی در داخل بدنه درخواست
          */
-        $jsonData = json_encode($data);
-        $curl = curl_init();
-        curl_setopt_array($curl, array(
-            CURLOPT_URL => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_ENCODING => '',
-            CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 0,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_CUSTOMREQUEST => 'POST',
-            CURLOPT_POSTFIELDS => $jsonData,
-            CURLOPT_HTTPHEADER => array(
-                'Content-Type: application/json'
-            ),
-        ));
-
-        $response = curl_exec($curl);
-
-        $http_status = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-        curl_close($curl);
-        $response = json_decode($response);
+        $client = new \GuzzleHttp\Client([
+            'timeout' => 10,
+            'read_timeout' => 10,
+            'connect_timeout' => 10 ,
+            'headers' => []]);
+        $response = $client->post($url, ['json' => $data]);
+        $result = $response->getBody();
+        $http_status = $response->getStatusCode();
+        $response = json_decode($result);
         return [$response, $http_status];
-    }
-
-    /*
-     * تابعی برای دریافت آدرس اجرای محل پروژه
-     */
-    public static function getUrl()
-    {
-        $protocl = "http:";
-        if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] != 'off') {
-            $protocl = "https://";
-        }
-        $url = $protocl . '//' . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF']);
-
-        /*
-         * برای اینکه ادرس از مسیر مرور گر برداشته شده احتمال دارد اخرش به صورت پیش فرض / باشد اگر نبود گذاشته شود
-         */
-        if (substr($url, -1) != "/")
-            $url = $url . "/";
-        return $url;
     }
     
 }

@@ -16,16 +16,12 @@ class PaymentRequest extends Model
 
     protected $fillable = [
         "Amount",
-        "CallbackURL",
         "Description",
         "Email",
-        "MerchantId",
         "Mobile",
+        "user_id",
+        "Status",
+        "Authority",
     ];
-
-    public function __construct()
-    {
-        $this->CallbackURL = 
-    }
 
 }

@@ -24,10 +24,5 @@
         "Rayanpay\\RayanGate\\RayanGateServiceProvider"
       ]
     }
-  },
-  "autoload-dev": {
-    "psr-4": {
-      "Egulias\\RayanGate\\Tests\\": "tests"
-    }
   }
 }

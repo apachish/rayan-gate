@@ -12,8 +12,8 @@ class RayanGateServiceProvider extends ServiceProvider
 
     public function register()
     {
-        $this->mergeConfigFrom(__DIR__.'/config/errors.php','errors-gatway');
-        $this->mergeConfigFrom(__DIR__.'/config/config.php','config-gatway');
+        $this->mergeConfigFrom(__DIR__.'/config/errors.php','errors-gateway');
+        $this->mergeConfigFrom(__DIR__.'/config/config.php','config-gateway');
     }
 
     public function boot()
