@@ -64,7 +64,7 @@ class RayanPayServices
         $type_gateway = config("config-gateway.type_gateway");
         $paymentRequest->setMerchantId( config("config-gateway.MerchantID"));
         $paymentRequest->setAmount(  (int)$paymentRequest->Amount);
-        $paymentRequest->setCallbackURL( route(env("CALLBACKBANK"));
+        $paymentRequest->setCallbackURL( route(config("gateway.verify")));
 
         if ($type_gateway == "soap" && self::soap_check() === true) {
             $client = new SoapClient(config("config-gateway.address_soap"), [
